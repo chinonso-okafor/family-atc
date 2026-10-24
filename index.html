@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Family Air Traffic Control</title>
+  <link rel="stylesheet" href="styles.css">
+  <script type="importmap">
+    { "imports": { "ical.js": "https://cdn.jsdelivr.net/npm/ical.js@2.2.1/dist/ical.min.js" } }
+  </script>
+  <script type="module" src="src/app.js"></script>
+</head>
+<body>
+  <header>
+    <h1>Family Air Traffic Control</h1>
+    <p id="summary"></p>
+  </header>
+
+  <section class="setup">
+    <details open>
+      <summary>Calendars</summary>
+      <p class="hint">Export each person's calendar as .ics (Google Calendar: Settings → the calendar → Export, or "Secret address in iCal format"). Mark who can drive.</p>
+      <ul id="people"></ul>
+      <label class="file">Add .ics files <input id="add-files" type="file" accept=".ics,text/calendar" multiple></label>
+      <button id="load-sample">Load sample family</button>
+      <label>Travel buffer <input id="buffer" type="number" min="5" max="90" step="5" value="20"> min</label>
+      <p id="errors" class="errors"></p>
+    </details>
+  </section>
+
+  <nav class="weeknav">
+    <button id="prev" aria-label="Previous week">←</button>
+    <button id="today">This week</button>
+    <button id="next" aria-label="Next week">→</button>
+    <span id="week-label"></span>
+  </nav>
+
+  <main id="week" class="week"></main>
+
+  <aside id="detail" class="detail" hidden></aside>
+
+  <section>
+    <h2>Conflicts</h2>
+    <ul id="conflict-list" class="conflict-list"></ul>
+  </section>
+</body>
+</html>

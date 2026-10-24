@@ -1,0 +1,14 @@
+{
+  "name": "family-atc",
+  "version": "0.1.0",
+  "description": "Family Air Traffic Control: merge family calendars and flag driving conflicts",
+  "scripts": {
+    "start": "npx --yes serve -l 5173 .",
+    "test": "node --test test/*.test.js"
+  },
+  "dependencies": {
+    "ical.js": "^2.2.1"
+  },
+  "private": true,
+  "type": "module"
+}
