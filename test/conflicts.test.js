@@ -3,12 +3,14 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { parseIcs } from '../src/ics.js';
 import { detectConflicts, buildRideLegs } from '../src/conflicts.js';
+import { makeTravelTime, haversineKm } from '../src/travel.js';
+import { optionsFor, calendarGaps, sundayBriefing } from '../src/briefing.js';
 
 const family = [
-  { id: 'mom', role: 'adult' },
-  { id: 'dad', role: 'adult' },
-  { id: 'ada', role: 'kid' },
-  { id: 'ben', role: 'kid' },
+  { id: 'mom', name: 'Mom', role: 'adult' },
+  { id: 'dad', name: 'Dad', role: 'adult' },
+  { id: 'ada', name: 'Ada', role: 'kid' },
+  { id: 'ben', name: 'Ben', role: 'kid' },
 ];
 const rangeStart = new Date(2026, 9, 26); // Mon Oct 26 2026, local time
 const rangeEnd = new Date(2026, 10, 2);
@@ -39,6 +41,7 @@ test('finds the sample week\'s three driver conflicts', () => {
   assert.deepEqual(summary, [
     'no-driver dropoff 2 16:10', // Tue: soccer + swim drop-offs, one free adult
     'no-driver dropoff 3 15:40', // Wed: Mom at dentist, Dad at work
+    'tight-handoff handoff 3 16:45', // Wed: piano ends 4:45, robotics starts 5:00, 20 min away
     'no-driver dropoff 6 08:40', // Sat: Mom at yoga, Dad golfing
   ]);
   // Tuesday: two drop-offs at once (soccer + swim), Dad is the only free adult
@@ -64,4 +67,46 @@ test('a kid in two places at once is flagged', () => {
   ];
   const { conflicts } = detectConflicts(evs, [{ id: 'mom', role: 'adult' }, { id: 'ben', role: 'kid' }]);
   assert.equal(conflicts[0].type, 'double-booked');
+});
+
+test('travel time uses coordinates when known, flat buffer otherwise', () => {
+  const places = { a: { lat: 40.0, lng: -75.0 }, b: { lat: 40.05, lng: -75.0 } };
+  const t = makeTravelTime({ places, fallbackMin: 20 });
+  assert.ok(Math.abs(haversineKm(places.a, places.b) - 5.56) < 0.05);
+  assert.equal(t('a', 'b'), 20); // ~7.8 km road at 35 km/h + 5 min overhead -> 18.4 -> 20
+  assert.equal(t('a', 'unknown'), 20);
+  assert.equal(t('a', 'a'), 5);
+});
+
+test('a short real drive turns a tight handoff into a clean one', () => {
+  const places = { 'harmony music studio': { lat: 40, lng: -75 }, 'lincoln library': { lat: 40.003, lng: -75 } };
+  const t = makeTravelTime({ places, fallbackMin: 20 });
+  const { conflicts } = detectConflicts(events, family, { travelMin: t });
+  assert.ok(!conflicts.some((c) => c.type === 'tight-handoff'));
+});
+
+test('options name the swap, the busy adults and carpool contacts', () => {
+  const { conflicts } = detectConflicts(events, family);
+  const nameOf = (id) => family.find((p) => p.id === id).name;
+  const tue = conflicts.find((c) => c.type === 'no-driver');
+  const opts = optionsFor(tue, { nameOf, carpool: [{ name: 'The Garcias', note: 'swim' }] });
+  assert.ok(opts.some((o) => o.includes('Dad') && o.includes('nobody is left')));
+  assert.ok(opts.some((o) => o.includes('Client dinner')));
+  assert.ok(opts.some((o) => o.includes('The Garcias')));
+});
+
+test('calendar gaps are called out', () => {
+  const gaps = calendarGaps(events.filter((e) => e.person !== 'ben'), family);
+  assert.ok(gaps.some((g) => g.startsWith('Ben has no events')));
+  const noLoc = [{ person: 'ada', title: 'Tutor', location: '', start: new Date(), end: new Date() }];
+  assert.ok(calendarGaps(noLoc, [{ id: 'ada', name: 'Ada', role: 'kid' }])[0].includes('no location'));
+});
+
+test('briefing lists conflicts by day with a suggestion', () => {
+  const r = detectConflicts(events, family);
+  const text = sundayBriefing({ family, ...r, events, weekStart: rangeStart });
+  assert.match(text, /4 conflicts to sort out/);
+  assert.match(text, /TUESDAY/);
+  assert.match(text, /Try:/);
+  assert.match(text, /Driving load:/);
 });

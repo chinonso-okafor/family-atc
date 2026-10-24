@@ -1,8 +1,11 @@
 import { parseIcs } from './ics.js';
 import { detectConflicts } from './conflicts.js';
 import { renderWeek, startOfDay, fmtTime, fmtDay } from './lanes.js';
+import { makeTravelTime, normalizePlace, geocode } from './travel.js';
+import { optionsFor, calendarGaps, sundayBriefing } from './briefing.js';
 
 const STORAGE_KEY = 'family-atc:v1';
+const SETTINGS_KEY = 'family-atc:settings:v1';
 const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#a855f7', '#ec4899', '#14b8a6'];
 const SAMPLE = [
   { id: 'mom', name: 'Mom', role: 'adult', file: 'samples/mom.ics' },
@@ -16,6 +19,8 @@ const state = {
   weekStart: mondayOf(new Date()),
   bufferMin: 20,
   selectedId: null,
+  settings: loadSettings(), // { home, places: {normalizedName: {lat,lng}}, carpool: [{name, note}] }
+  lastEvents: [],
 };
 
 const $ = (sel) => document.querySelector(sel);
@@ -31,6 +36,18 @@ function load() {
   } catch {
     return null;
   }
+}
+function loadSettings() {
+  try {
+    return { home: '', places: {}, carpool: [], ...JSON.parse(localStorage.getItem(SETTINGS_KEY)) };
+  } catch {
+    return { home: '', places: {}, carpool: [] };
+  }
+}
+function saveSettings() {
+  try {
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify(state.settings));
+  } catch { /* see save() */ }
 }
 function save() {
   try {
@@ -54,7 +71,9 @@ function render() {
   });
   $('#errors').textContent = errors.join(' · ');
 
-  const { legs, assignment, conflicts } = detectConflicts(events, state.family, { bufferMin: state.bufferMin });
+  state.lastEvents = events;
+  const travelMin = makeTravelTime({ places: state.settings.places, home: state.settings.home, fallbackMin: state.bufferMin });
+  const { legs, assignment, conflicts } = detectConflicts(events, state.family, { travelMin });
   if (!conflicts.some((c) => c.id === state.selectedId)) state.selectedId = null;
 
   const rides = legs.length;
@@ -71,6 +90,12 @@ function render() {
   });
   renderDetail(conflicts.find((c) => c.id === state.selectedId));
   renderList(conflicts);
+  renderGaps(events);
+  $('#briefing').textContent = state.family.length
+    ? sundayBriefing({ family: state.family, legs, assignment, conflicts, events, weekStart: state.weekStart, carpool: state.settings.carpool })
+    : '';
+  $('#home').value = state.settings.home;
+  $('#carpool').value = state.settings.carpool.map((c) => (c.note ? `${c.name}, ${c.note}` : c.name)).join('\n');
 }
 
 function renderList(conflicts) {
@@ -91,6 +116,7 @@ const nameOf = (id) => state.family.find((p) => p.id === id)?.name ?? id;
 function headline(c) {
   if (c.type === 'double-booked') return `${nameOf(c.people[0])} is in two places at once`;
   const l = c.leg;
+  if (c.type === 'tight-handoff') return `${l.kids.map(nameOf).join(' and ')} can't get from ${l.from} to ${l.to} in time`;
   const kids = l.kids.map(nameOf).join(' and ');
   if (l.kind === 'dropoff') return `${kids} needs a ride to ${l.to}`;
   if (l.kind === 'pickup') return `${kids} needs picking up from ${l.from}`;
@@ -108,7 +134,7 @@ function renderDetail(c) {
   if (c.type === 'double-booked') {
     for (const e of c.events) lines.push(`${e.title}: ${fmtTime(e.start)}–${fmtTime(e.end)}${e.location ? ` at ${e.location}` : ''}`);
   } else {
-    lines.push(`Car needed ${fmtTime(c.start)}–${fmtTime(c.end)} (assumes ${state.bufferMin} min travel)`);
+    lines.push(`Car needed ${fmtTime(c.start)}–${fmtTime(c.end)} (about ${c.leg.travelMin ?? state.bufferMin} min of driving)`);
     for (const b of c.busy) lines.push(`${nameOf(b.adult)} is busy: ${b.event.title} ${fmtTime(b.event.start)}–${fmtTime(b.event.end)}`);
     for (const d of c.drivingElsewhere) {
       lines.push(`${nameOf(d.adult)} is free but already driving ${d.leg.kids.map(nameOf).join(' + ')} ${d.leg.kind === 'pickup' ? `from ${d.leg.from}` : `to ${d.leg.to}`}`);
@@ -123,11 +149,35 @@ function renderDetail(c) {
     li.textContent = t;
     ul.append(li);
   }
+  const opts = optionsFor(c, { nameOf, carpool: state.settings.carpool });
+  const optsBox = document.createElement('div');
+  if (opts.length) {
+    const oh = document.createElement('h4');
+    oh.textContent = 'Options';
+    const ol = document.createElement('ul');
+    for (const t of opts) {
+      const li = document.createElement('li');
+      li.textContent = t;
+      ol.append(li);
+    }
+    optsBox.append(oh, ol);
+  }
   const close = document.createElement('button');
   close.className = 'close';
   close.textContent = 'Close';
   close.addEventListener('click', () => { state.selectedId = null; render(); });
-  box.append(h, ul, close);
+  box.append(h, ul, optsBox, close);
+}
+
+function renderGaps(events) {
+  const ul = $('#gaps');
+  ul.innerHTML = '';
+  for (const g of calendarGaps(events, state.family)) {
+    const li = document.createElement('li');
+    li.textContent = g;
+    ul.append(li);
+  }
+  $('#gaps-box').hidden = !ul.children.length;
 }
 
 function renderPeople() {
@@ -167,6 +217,9 @@ async function addFiles(files) {
 }
 
 async function loadSample() {
+  const extra = await (await fetch('samples/places.json')).json();
+  state.settings = { home: extra.home, places: extra.places, carpool: extra.carpool };
+  saveSettings();
   state.family = await Promise.all(SAMPLE.map(async (p, i) => ({
     id: p.id, name: p.name, role: p.role, color: COLORS[i],
     ics: await (await fetch(p.file)).text(),
@@ -177,10 +230,51 @@ async function loadSample() {
 
 $('#add-files').addEventListener('change', (e) => addFiles(e.target.files));
 $('#load-sample').addEventListener('click', loadSample);
+$('#home').addEventListener('change', (e) => { state.settings.home = e.target.value.trim(); saveSettings(); render(); });
+$('#carpool').addEventListener('change', (e) => {
+  state.settings.carpool = e.target.value.split('\n').map((l) => l.trim()).filter(Boolean).map((l) => {
+    const [name, ...note] = l.split(',');
+    return { name: name.trim(), note: note.join(',').trim() };
+  });
+  saveSettings();
+  render();
+});
+$('#copy-briefing').addEventListener('click', async () => {
+  try { await navigator.clipboard.writeText($('#briefing').textContent); $('#copy-briefing').textContent = 'Copied'; }
+  catch { $('#copy-briefing').textContent = 'Select the text and copy it'; }
+  setTimeout(() => { $('#copy-briefing').textContent = 'Copy briefing'; }, 2000);
+});
+$('#locate').addEventListener('click', locatePlaces);
 $('#prev').addEventListener('click', () => shiftWeek(-7));
 $('#next').addEventListener('click', () => shiftWeek(7));
 $('#today').addEventListener('click', () => { state.weekStart = mondayOf(new Date()); render(); });
 $('#buffer').addEventListener('change', (e) => { state.bufferMin = Number(e.target.value) || 20; render(); });
+
+// Look up every address we don't have coordinates for, one per second
+// (Nominatim's usage policy), then re-render with real travel times.
+async function locatePlaces() {
+  const names = new Map();
+  if (state.settings.home) names.set(normalizePlace(state.settings.home), state.settings.home);
+  for (const e of state.lastEvents) if (e.location) names.set(normalizePlace(e.location), e.location);
+  const todo = [...names].filter(([key]) => !state.settings.places[key]);
+  const status = $('#locate-status');
+  const failed = [];
+  for (const [i, [key, label]] of todo.entries()) {
+    status.textContent = `Looking up ${i + 1} of ${todo.length}: ${label}`;
+    try {
+      const hit = await geocode(label);
+      if (hit) state.settings.places[key] = hit; else failed.push(label);
+    } catch {
+      failed.push(label);
+    }
+    await new Promise((r) => setTimeout(r, 1100));
+  }
+  saveSettings();
+  status.textContent = failed.length
+    ? `Couldn't find: ${failed.join('; ')}. Those use the flat ${state.bufferMin} min estimate.`
+    : todo.length ? 'All places found.' : 'Nothing new to look up.';
+  render();
+}
 
 function shiftWeek(days) {
   const w = state.weekStart;

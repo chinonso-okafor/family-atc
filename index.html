@@ -24,6 +24,12 @@
       <label class="file">Add .ics files <input id="add-files" type="file" accept=".ics,text/calendar" multiple></label>
       <button id="load-sample">Load sample family</button>
       <label>Travel buffer <input id="buffer" type="number" min="5" max="90" step="5" value="20"> min</label>
+      <div class="travel">
+        <label>Home address <input id="home" placeholder="12 Oak St, Springfield"></label>
+        <button id="locate" title="Looks up addresses with OpenStreetMap so travel times use real distances">Look up travel times</button>
+        <span id="locate-status" class="hint"></span>
+        <label>Carpool contacts, one per line (<code>name, note</code>)<br><textarea id="carpool" rows="3"></textarea></label>
+      </div>
       <p id="errors" class="errors"></p>
     </details>
   </section>
@@ -38,6 +44,17 @@
   <main id="week" class="week"></main>
 
   <aside id="detail" class="detail" hidden></aside>
+
+  <section id="gaps-box" class="gaps" hidden>
+    <h2>Check before trusting this</h2>
+    <ul id="gaps"></ul>
+  </section>
+
+  <section>
+    <h2>Sunday briefing</h2>
+    <pre id="briefing" class="briefing"></pre>
+    <button id="copy-briefing">Copy briefing</button>
+  </section>
 
   <section>
     <h2>Conflicts</h2>

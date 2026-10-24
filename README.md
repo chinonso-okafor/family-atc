@@ -22,9 +22,14 @@ Click **Load sample family** and go to the week of Oct 26 2026 to see three seed
 
 Travel time is a flat buffer for now (default 20 min).
 
-## Next (Sunday plan)
+## Travel time, options and the briefing
 
-- Real travel time between locations (routing API or straight-line distance estimate)
-- Conflict drill-in options: swap drivers, ask a carpool contact
-- "Sunday briefing" summary of the coming week
-- Nudge about calendar gaps (e.g. no school pickups in any feed) so the radar doesn't give false confidence
+- `src/travel.js` estimates drive time from coordinates (straight-line distance x 1.4 for roads, 35 km/h, 5 min overhead). **Look up travel times** geocodes the addresses with OpenStreetMap's Nominatim (one request per second) and caches them in the browser. Anything it can't find uses the flat buffer.
+- A kid whose next activity starts before they can get there is flagged as a **tight handoff**.
+- Clicking a conflict lists options: swap drivers (and whether that leaves another trip uncovered), ask a busy adult to move something, or ask a carpool contact (one per line in settings).
+- `src/briefing.js` writes the Sunday briefing (copy it into the family chat) and a "Check before trusting this" box for calendars that are empty or have kid events with no location.
+
+## Not done yet
+
+- Fetching Google "secret iCal" URLs (needs a small CORS proxy)
+- Sending the briefing anywhere automatically

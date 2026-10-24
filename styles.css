@@ -55,3 +55,10 @@ button, input, select { font: inherit; }
 .detail h3 { margin: 0 0 8px; font-size: 1rem; color: var(--red); }
 .conflict-list { padding-left: 18px; }
 .conflict-list button { background: none; border: 0; color: inherit; text-align: left; cursor: pointer; padding: 2px 0; text-decoration: underline; }
+
+.travel { display: grid; gap: 8px; margin: 8px 0; max-width: 480px; }
+.travel input, .travel textarea { width: 100%; }
+.detail h4 { margin: 12px 0 4px; }
+.gaps { padding: 8px 16px; border: 1px solid #d97706; border-radius: 8px; background: color-mix(in srgb, #d97706 10%, var(--lane)); }
+.gaps h2 { margin: 4px 0; }
+.briefing { white-space: pre-wrap; font: inherit; background: var(--lane); border: 1px solid var(--line); border-radius: 8px; padding: 12px 16px; }
