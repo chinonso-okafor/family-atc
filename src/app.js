@@ -201,17 +201,27 @@ function renderPeople() {
   }
 }
 
+const ADULT_NAMES = /^(mom|mum|mommy|mother|dad|daddy|father|parent|grandma|grandpa|granny|nanny)\b/i;
+
+// Re-uploading someone's calendar replaces it instead of adding them twice.
 async function addFiles(files) {
   for (const f of files) {
-    const name = f.name.replace(/\.ics$/i, '');
+    const ics = await f.text();
+    const name = ics.match(/^X-WR-CALNAME:(.+)$/m)?.[1].trim() || f.name.replace(/\.ics$/i, '');
+    const existing = state.family.find((p) => p.name.toLowerCase() === name.toLowerCase());
+    if (existing) {
+      existing.ics = ics;
+      continue;
+    }
     state.family.push({
       id: `${name.toLowerCase().replace(/\W+/g, '-')}-${Date.now().toString(36)}`,
       name,
-      role: 'kid',
+      role: ADULT_NAMES.test(name) ? 'adult' : 'kid',
       color: COLORS[state.family.length % COLORS.length],
-      ics: await f.text(),
+      ics,
     });
   }
+  $('#add-files').value = '';
   save();
   render();
 }
@@ -230,6 +240,24 @@ async function loadSample() {
 
 $('#add-files').addEventListener('change', (e) => addFiles(e.target.files));
 $('#load-sample').addEventListener('click', loadSample);
+$('#clear-all').addEventListener('click', () => {
+  if (!confirm('Remove everyone\'s calendar from this browser?')) return;
+  state.family = [];
+  save();
+  render();
+});
+
+const THEME_KEY = 'family-atc:theme';
+function applyTheme(theme) {
+  if (theme === 'light' || theme === 'dark') document.documentElement.dataset.theme = theme;
+  else delete document.documentElement.dataset.theme;
+  $('#theme').value = theme;
+}
+try { applyTheme(localStorage.getItem(THEME_KEY) || 'auto'); } catch { applyTheme('auto'); }
+$('#theme').addEventListener('change', (e) => {
+  applyTheme(e.target.value);
+  try { localStorage.setItem(THEME_KEY, e.target.value); } catch { /* per-visit only */ }
+});
 $('#home').addEventListener('change', (e) => { state.settings.home = e.target.value.trim(); saveSettings(); render(); });
 $('#carpool').addEventListener('change', (e) => {
   state.settings.carpool = e.target.value.split('\n').map((l) => l.trim()).filter(Boolean).map((l) => {

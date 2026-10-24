@@ -47,7 +47,7 @@ export function calendarGaps(events, family) {
     if (p.role === 'kid') {
       const noLoc = mine.filter((e) => !e.allDay && !e.free && !e.location);
       if (noLoc.length) {
-        warnings.push(`${noLoc.length} of ${p.name}'s events have no location (${noLoc.slice(0, 3).map((e) => `"${e.title}"`).join(', ')}${noLoc.length > 3 ? ', …' : ''}), so no rides can be planned for them.`);
+        warnings.push(`${noLoc.length} of ${p.name}'s events ${noLoc.length === 1 ? 'has' : 'have'} no location (${noLoc.slice(0, 3).map((e) => `"${e.title}"`).join(', ')}${noLoc.length > 3 ? ', …' : ''}), so no rides can be planned for them.`);
       }
     }
   }

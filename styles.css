@@ -5,13 +5,16 @@
   color-scheme: light dark;
 }
 @media (prefers-color-scheme: dark) {
-  :root { --bg: #151517; --fg: #ececee; --muted: #9a9aa0; --line: #2c2c30; --lane: #1d1d20; --red-bg: rgba(248, 113, 113, 0.2); }
+  :root:not([data-theme="light"]) { --bg: #151517; --fg: #ececee; --muted: #9a9aa0; --line: #2c2c30; --lane: #1d1d20; --red-bg: rgba(248, 113, 113, 0.2); color-scheme: dark; }
 }
+:root[data-theme="dark"] { --bg: #151517; --fg: #ececee; --muted: #9a9aa0; --line: #2c2c30; --lane: #1d1d20; --red-bg: rgba(248, 113, 113, 0.2); color-scheme: dark; }
+:root[data-theme="light"] { color-scheme: light; }
 * { box-sizing: border-box; }
 body { margin: 0; padding: 16px; background: var(--bg); color: var(--fg); }
 h1 { font-size: 1.3rem; margin: 0; }
 h2 { font-size: 1rem; }
 header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 12px; }
+header .theme { margin-left: auto; font-size: 0.85rem; color: var(--muted); }
 #summary { margin: 0; color: var(--muted); }
 #summary.bad { color: var(--red); font-weight: 600; }
 button, input, select { font: inherit; }

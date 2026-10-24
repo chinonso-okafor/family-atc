@@ -14,15 +14,19 @@
   <header>
     <h1>Family Air Traffic Control</h1>
     <p id="summary"></p>
+    <label class="theme">Theme
+      <select id="theme"><option value="auto">Match system</option><option value="light">Light</option><option value="dark">Dark</option></select>
+    </label>
   </header>
 
   <section class="setup">
     <details open>
       <summary>Calendars</summary>
-      <p class="hint">Export each person's calendar as .ics (Google Calendar: Settings → the calendar → Export, or "Secret address in iCal format"). Mark who can drive.</p>
+      <p class="hint">Export each person's calendar as .ics (Google Calendar: Settings → the calendar → Export, or "Secret address in iCal format"). Mark who can drive. Uploading someone's calendar again replaces their old one.</p>
       <ul id="people"></ul>
       <label class="file">Add .ics files <input id="add-files" type="file" accept=".ics,text/calendar" multiple></label>
       <button id="load-sample">Load sample family</button>
+      <button id="clear-all">Remove all</button>
       <label>Travel buffer <input id="buffer" type="number" min="5" max="90" step="5" value="20"> min</label>
       <div class="travel">
         <label>Home address <input id="home" placeholder="12 Oak St, Springfield"></label>
