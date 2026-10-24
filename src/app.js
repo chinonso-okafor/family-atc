@@ -129,12 +129,44 @@ function render() {
   });
   renderDetail(conflicts.find((c) => c.id === state.selectedId));
   renderList(conflicts);
+  renderMonitor(conflicts, 'this week', next ?? (conflicts.length ? null : nextConflictAfter(weekEnd)));
   renderGaps(events);
   $('#briefing').textContent = state.family.length
     ? sundayBriefing({ family: state.family, legs, assignment, conflicts, events, weekStart, carpool: state.settings.carpool })
     : '';
   $('#home').value = state.settings.home;
   $('#carpool').value = state.settings.carpool.map((c) => (c.note ? `${c.name}, ${c.note}` : c.name)).join('\n');
+}
+
+// Top-right panel: the week's conflicts at a glance, wherever you're scrolled to.
+function renderMonitor(conflicts, label, next) {
+  const box = $('#monitor');
+  box.hidden = !state.family.length;
+  box.classList.toggle('alert', conflicts.length > 0);
+  $('#monitor-range').textContent = label;
+  $('#monitor-count').textContent = conflicts.length
+    ? `${conflicts.length} conflict${conflicts.length === 1 ? '' : 's'}`
+    : 'All clear';
+  const ol = $('#monitor-list');
+  ol.innerHTML = '';
+  for (const c of conflicts) {
+    const li = document.createElement('li');
+    const btn = document.createElement('button');
+    btn.className = c.id === state.selectedId ? 'selected' : '';
+    const when = document.createElement('span');
+    when.className = 'when';
+    when.textContent = `${c.start.toLocaleDateString([], { weekday: 'short' })} ${fmtTime(c.start)}`;
+    btn.append(when, document.createTextNode(headline(c)));
+    btn.addEventListener('click', () => { state.selectedId = c.id; state.focus = startOfDay(c.start); render(); $('#detail').scrollIntoView({ behavior: 'smooth', block: 'nearest' }); });
+    li.append(btn);
+    ol.append(li);
+  }
+  const nb = $('#monitor-next');
+  nb.hidden = conflicts.length > 0 || !next;
+  if (next) {
+    nb.textContent = `Next: ${fmtDay(next.start)} ${fmtTime(next.start)} →`;
+    nb.onclick = () => { state.focus = startOfDay(next.start); state.selectedId = next.id; render(); };
+  }
 }
 
 function renderList(conflicts) {

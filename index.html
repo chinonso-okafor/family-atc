@@ -12,11 +12,19 @@
 </head>
 <body>
   <header>
-    <h1>Family Air Traffic Control</h1>
-    <p id="summary"></p>
-    <label class="theme">Theme
-      <select id="theme"><option value="auto">Match system</option><option value="light">Light</option><option value="dark">Dark</option></select>
-    </label>
+    <div class="title">
+      <h1>Family Air Traffic Control</h1>
+      <p id="summary"></p>
+      <label class="theme">Theme
+        <select id="theme"><option value="auto">Match system</option><option value="light">Light</option><option value="dark">Dark</option></select>
+      </label>
+    </div>
+    <aside id="monitor" class="monitor" aria-live="polite">
+      <div class="monitor-head"><span class="light" aria-hidden="true"></span><span>Conflict monitor</span><span id="monitor-range" class="monitor-range"></span></div>
+      <p id="monitor-count" class="monitor-count"></p>
+      <ol id="monitor-list" class="monitor-list"></ol>
+      <button id="monitor-next" class="monitor-next" hidden></button>
+    </aside>
   </header>
 
   <section class="setup">
