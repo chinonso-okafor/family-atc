@@ -1,6 +1,6 @@
 import { parseIcs } from './ics.js';
 import { detectConflicts } from './conflicts.js';
-import { renderWeek, startOfDay, fmtTime, fmtDay } from './lanes.js';
+import { renderLanes, startOfDay, fmtTime, fmtDay } from './lanes.js';
 import { makeTravelTime, normalizePlace, geocode } from './travel.js';
 import { optionsFor, calendarGaps, sundayBriefing } from './briefing.js';
 
@@ -16,7 +16,8 @@ const SAMPLE = [
 
 const state = {
   family: load() ?? [], // [{id, name, role, color, ics}]
-  weekStart: mondayOf(new Date()),
+  view: 'week', // or 'day'
+  focus: startOfDay(new Date()), // the day being looked at; the week is the one containing it
   bufferMin: 20,
   selectedId: null,
   settings: loadSettings(), // { home, places: {normalizedName: {lat,lng}}, carpool: [{name, note}] }
@@ -55,26 +56,62 @@ function save() {
   } catch { /* private mode etc. — the app still works for this visit */ }
 }
 
-function render() {
-  renderPeople();
-  const weekEnd = new Date(state.weekStart.getFullYear(), state.weekStart.getMonth(), state.weekStart.getDate() + 7);
-  $('#week-label').textContent = `${fmtDay(state.weekStart)} – ${fmtDay(new Date(weekEnd - 1))}`;
+const addDays = (d, n) => new Date(d.getFullYear(), d.getMonth(), d.getDate() + n);
 
-  const errors = [];
-  const events = state.family.flatMap((p) => {
+function eventsBetween(rangeStart, rangeEnd, errors = []) {
+  return state.family.flatMap((p) => {
     try {
-      return parseIcs(p.ics, { person: p.id, rangeStart: state.weekStart, rangeEnd: weekEnd });
+      return parseIcs(p.ics, { person: p.id, rangeStart, rangeEnd });
     } catch (err) {
       errors.push(`${p.name}: couldn't read calendar (${err.message})`);
       return [];
     }
   });
+}
+
+const travelTime = () => makeTravelTime({ places: state.settings.places, home: state.settings.home, fallbackMin: state.bufferMin });
+
+// First conflict after `from`, looking up to 12 weeks ahead.
+function nextConflictAfter(from) {
+  const events = eventsBetween(from, addDays(from, 84));
+  return detectConflicts(events, state.family, { travelMin: travelTime() }).conflicts
+    .find((c) => c.start >= from);
+}
+
+function render() {
+  renderPeople();
+  const weekStart = mondayOf(state.focus);
+  const weekEnd = addDays(weekStart, 7);
+  const isDay = state.view === 'day';
+  const from = isDay ? state.focus : weekStart;
+  const to = isDay ? addDays(state.focus, 1) : weekEnd;
+  $('#week-label').textContent = isDay
+    ? state.focus.toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' })
+    : `${fmtDay(weekStart)} – ${fmtDay(addDays(weekEnd, -1))}`;
+  $('#today').textContent = isDay ? 'Today' : 'This week';
+  $('#prev').setAttribute('aria-label', isDay ? 'Previous day' : 'Previous week');
+  $('#next').setAttribute('aria-label', isDay ? 'Next day' : 'Next week');
+  for (const b of document.querySelectorAll('[data-view]')) b.setAttribute('aria-pressed', String(b.dataset.view === state.view));
+
+  // conflicts are always worked out for the whole week, so drivers are
+  // assigned with the same context whichever view is showing
+  const errors = [];
+  const events = eventsBetween(weekStart, weekEnd, errors);
   $('#errors').textContent = errors.join(' · ');
 
   state.lastEvents = events;
-  const travelMin = makeTravelTime({ places: state.settings.places, home: state.settings.home, fallbackMin: state.bufferMin });
-  const { legs, assignment, conflicts } = detectConflicts(events, state.family, { travelMin });
+  const { legs, assignment, conflicts } = detectConflicts(events, state.family, { travelMin: travelTime() });
   if (!conflicts.some((c) => c.id === state.selectedId)) state.selectedId = null;
+
+  const shown = conflicts.filter((c) => c.start >= from && c.start < to);
+  const next = state.family.length && !shown.length ? nextConflictAfter(to) : null;
+  const jump = $('#next-conflict');
+  jump.hidden = !next && !(state.family.length && !shown.length);
+  jump.disabled = !next;
+  jump.textContent = next
+    ? `No conflicts ${isDay ? 'today' : 'this week'}. Next: ${fmtDay(next.start)} ${fmtTime(next.start)} →`
+    : `No conflicts in the next 12 weeks`;
+  jump.onclick = next ? () => { state.focus = startOfDay(next.start); state.selectedId = next.id; render(); } : null;
 
   const rides = legs.length;
   $('#summary').textContent = state.family.length
@@ -82,17 +119,19 @@ function render() {
     : 'Add each person\'s calendar to get started.';
   $('#summary').classList.toggle('bad', conflicts.length > 0);
 
-  renderWeek($('#week'), {
+  renderLanes($('#week'), {
     family: state.family, events, legs, assignment, conflicts,
-    weekStart: state.weekStart,
+    from,
+    dayCount: isDay ? 1 : 7,
     selectedId: state.selectedId,
     onSelect: (id) => { state.selectedId = id; render(); },
+    onDay: isDay ? null : (d) => { state.view = 'day'; state.focus = d; render(); },
   });
   renderDetail(conflicts.find((c) => c.id === state.selectedId));
   renderList(conflicts);
   renderGaps(events);
   $('#briefing').textContent = state.family.length
-    ? sundayBriefing({ family: state.family, legs, assignment, conflicts, events, weekStart: state.weekStart, carpool: state.settings.carpool })
+    ? sundayBriefing({ family: state.family, legs, assignment, conflicts, events, weekStart, carpool: state.settings.carpool })
     : '';
   $('#home').value = state.settings.home;
   $('#carpool').value = state.settings.carpool.map((c) => (c.note ? `${c.name}, ${c.note}` : c.name)).join('\n');
@@ -105,7 +144,7 @@ function renderList(conflicts) {
     const li = document.createElement('li');
     const btn = document.createElement('button');
     btn.textContent = `${fmtDay(c.start)} ${fmtTime(c.start)} · ${headline(c)}`;
-    btn.addEventListener('click', () => { state.selectedId = c.id; render(); });
+    btn.addEventListener('click', () => { state.selectedId = c.id; state.focus = startOfDay(c.start); render(); });
     li.append(btn);
     ul.append(li);
   }
@@ -273,9 +312,12 @@ $('#copy-briefing').addEventListener('click', async () => {
   setTimeout(() => { $('#copy-briefing').textContent = 'Copy briefing'; }, 2000);
 });
 $('#locate').addEventListener('click', locatePlaces);
-$('#prev').addEventListener('click', () => shiftWeek(-7));
-$('#next').addEventListener('click', () => shiftWeek(7));
-$('#today').addEventListener('click', () => { state.weekStart = mondayOf(new Date()); render(); });
+$('#prev').addEventListener('click', () => shift(-1));
+$('#next').addEventListener('click', () => shift(1));
+$('#today').addEventListener('click', () => { state.focus = startOfDay(new Date()); render(); });
+for (const b of document.querySelectorAll('[data-view]')) {
+  b.addEventListener('click', () => { state.view = b.dataset.view; render(); });
+}
 $('#buffer').addEventListener('change', (e) => { state.bufferMin = Number(e.target.value) || 20; render(); });
 
 // Look up every address we don't have coordinates for, one per second
@@ -304,9 +346,8 @@ async function locatePlaces() {
   render();
 }
 
-function shiftWeek(days) {
-  const w = state.weekStart;
-  state.weekStart = new Date(w.getFullYear(), w.getMonth(), w.getDate() + days);
+function shift(direction) {
+  state.focus = addDays(state.focus, direction * (state.view === 'day' ? 1 : 7));
   render();
 }
 

@@ -65,3 +65,26 @@ button, input, select { font: inherit; }
 .gaps { padding: 8px 16px; border: 1px solid #d97706; border-radius: 8px; background: color-mix(in srgb, #d97706 10%, var(--lane)); }
 .gaps h2 { margin: 4px 0; }
 .briefing { white-space: pre-wrap; font: inherit; background: var(--lane); border: 1px solid var(--line); border-radius: 8px; padding: 12px 16px; }
+
+.views { margin-left: auto; display: inline-flex; }
+.views button { border: 1px solid var(--line); background: var(--lane); color: inherit; padding: 2px 12px; cursor: pointer; }
+.views button:first-child { border-radius: 6px 0 0 6px; }
+.views button:last-child { border-radius: 0 6px 6px 0; border-left: 0; }
+.views button[aria-pressed="true"] { background: var(--fg); color: var(--bg); }
+button.day-head { background: none; border: 0; color: inherit; cursor: pointer; text-decoration: underline dotted; font: inherit; font-size: 0.8rem; font-weight: 600; }
+.next-conflict { display: block; margin: 0 0 8px; background: none; border: 1px dashed var(--line); border-radius: 6px; padding: 4px 10px; color: var(--muted); cursor: pointer; }
+.next-conflict:not(:disabled):hover { color: var(--red); border-color: var(--red); }
+.next-conflict[hidden] { display: none; }
+
+/* conflicts pulse like a radar contact so they're the first thing you see */
+@keyframes conflict-pulse {
+  0%, 100% { background-color: var(--red-bg); box-shadow: 0 0 0 0 transparent; }
+  50% { background-color: color-mix(in srgb, var(--red) 32%, transparent); box-shadow: 0 0 12px 2px color-mix(in srgb, var(--red) 45%, transparent); }
+}
+@keyframes conflict-outline { 0%, 100% { outline-color: var(--red); } 50% { outline-color: transparent; } }
+.band { animation: conflict-pulse 1.6s ease-in-out infinite; }
+.band.selected { animation: none; }
+.block.conflict { animation: conflict-outline 1.6s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .band, .block.conflict { animation: none; }
+}

@@ -43,7 +43,11 @@
     <button id="today">This week</button>
     <button id="next" aria-label="Next week">→</button>
     <span id="week-label"></span>
+    <span class="views" role="group" aria-label="View">
+      <button data-view="day">Day</button><button data-view="week">Week</button>
+    </span>
   </nav>
+  <button id="next-conflict" class="next-conflict" hidden></button>
 
   <main id="week" class="week"></main>
 
