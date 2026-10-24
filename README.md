@@ -33,3 +33,7 @@ Travel time is a flat buffer for now (default 20 min).
 
 - Fetching Google "secret iCal" URLs (needs a small CORS proxy)
 - Sending the briefing anywhere automatically
+
+## Sample calendars to upload
+
+`sample-calendars/` has a fuller family (Mom, Dad, Ada, Ben) from Oct 19 to Dec 20, 2026, with conflicts planted in particular weeks (regenerate with `python3 scripts/make-sample-calendars.py sample-calendars`). Upload all four, set Mom and Dad to adult, and page forward through the weeks.
