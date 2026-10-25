@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import { parseIcs } from '../src/ics.js';
 import { detectConflicts, buildRideLegs } from '../src/conflicts.js';
 import { makeTravelTime, haversineKm } from '../src/travel.js';
-import { optionsFor, calendarGaps, sundayBriefing } from '../src/briefing.js';
+import { calendarGaps } from '../src/briefing.js';
 
 const family = [
   { id: 'mom', name: 'Mom', role: 'adult' },
@@ -85,16 +85,6 @@ test('a short real drive turns a tight handoff into a clean one', () => {
   assert.ok(!conflicts.some((c) => c.type === 'tight-handoff'));
 });
 
-test('options name the swap, the busy adults and carpool contacts', () => {
-  const { conflicts } = detectConflicts(events, family);
-  const nameOf = (id) => family.find((p) => p.id === id).name;
-  const tue = conflicts.find((c) => c.type === 'no-driver');
-  const opts = optionsFor(tue, { nameOf, carpool: [{ name: 'The Garcias', note: 'swim' }] });
-  assert.ok(opts.some((o) => o.includes('Dad') && o.includes('nobody is left')));
-  assert.ok(opts.some((o) => o.includes('Client dinner')));
-  assert.ok(opts.some((o) => o.includes('The Garcias')));
-});
-
 test('calendar gaps are called out', () => {
   const gaps = calendarGaps(events.filter((e) => e.person !== 'ben'), family);
   assert.ok(gaps.some((g) => g.startsWith('Ben has no events')));
@@ -102,11 +92,3 @@ test('calendar gaps are called out', () => {
   assert.ok(calendarGaps(noLoc, [{ id: 'ada', name: 'Ada', role: 'kid' }])[0].includes('no location'));
 });
 
-test('briefing lists conflicts by day with a suggestion', () => {
-  const r = detectConflicts(events, family);
-  const text = sundayBriefing({ family, ...r, events, weekStart: rangeStart });
-  assert.match(text, /4 conflicts to sort out/);
-  assert.match(text, /TUESDAY/);
-  assert.match(text, /Try:/);
-  assert.match(text, /Driving load:/);
-});

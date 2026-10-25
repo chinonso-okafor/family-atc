@@ -2,8 +2,11 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Family Air Traffic Control</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=B612+Mono:wght@400;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
   <script type="importmap">
     { "imports": { "ical.js": "https://cdn.jsdelivr.net/npm/ical.js@2.2.1/dist/ical.min.js" } }
@@ -11,70 +14,137 @@
   <script type="module" src="src/app.js"></script>
 </head>
 <body>
-  <header>
-    <div class="title">
-      <h1>Family Air Traffic Control</h1>
-      <p id="summary"></p>
-      <label class="theme">Theme
-        <select id="theme"><option value="auto">Match system</option><option value="light">Light</option><option value="dark">Dark</option></select>
-      </label>
+<div class="wrap">
+  <header class="top">
+    <div>
+      <h1>Tower briefing</h1>
+      <p class="date-line"><span id="dateLine"></span>
+        <button id="prevWeek" aria-label="Previous week">‹</button><button id="nextWeek" aria-label="Next week">›</button>
+      </p>
+      <p class="lede" id="lede"></p>
     </div>
-    <aside id="monitor" class="monitor" aria-live="polite">
-      <div class="monitor-head"><span class="light" aria-hidden="true"></span><span>Conflict monitor</span><span id="monitor-range" class="monitor-range"></span></div>
-      <p id="monitor-count" class="monitor-count"></p>
-      <ol id="monitor-list" class="monitor-list"></ol>
-      <button id="monitor-next" class="monitor-next" hidden></button>
-    </aside>
+    <div class="hero-board"><span class="flap hero" id="heroFlap"></span><span class="sr" id="heroSr" aria-live="polite"></span></div>
   </header>
 
-  <section class="setup">
-    <details open>
-      <summary>Calendars</summary>
-      <p class="hint">Export each person's calendar as .ics (Google Calendar: Settings → the calendar → Export, or "Secret address in iCal format"). Mark who can drive. Uploading someone's calendar again replaces their old one.</p>
-      <ul id="people"></ul>
-      <label class="file">Add .ics files <input id="add-files" type="file" accept=".ics,text/calendar" multiple></label>
-      <button id="load-sample">Load sample family</button>
-      <button id="clear-all">Remove all</button>
-      <label>Travel buffer <input id="buffer" type="number" min="5" max="90" step="5" value="20"> min</label>
-      <div class="travel">
-        <label>Home address <input id="home" placeholder="12 Oak St, Springfield"></label>
-        <button id="locate" title="Looks up addresses with OpenStreetMap so travel times use real distances">Look up travel times</button>
-        <span id="locate-status" class="hint"></span>
-        <label>Carpool contacts, one per line (<code>name, note</code>)<br><textarea id="carpool" rows="3"></textarea></label>
+  <div class="bar">
+    <div class="seg" role="group" aria-label="View">
+      <button id="tabPlan" aria-pressed="true">Plan the week</button>
+      <button id="tabReplay" aria-pressed="false">Replay a day</button>
+      <button id="tabToday" aria-pressed="false">Today’s board</button>
+      <button id="tabLanes" aria-pressed="false">Lanes</button>
+    </div>
+    <div class="utils">
+      <button class="btn" id="soundBtn" aria-pressed="false">Sound off</button>
+      <button class="btn" id="copyBtn">Copy briefing</button>
+      <button class="btn" id="resetBtn">Start over</button>
+      <button class="btn" id="setupBtn" aria-expanded="false" aria-controls="drawer">Calendars</button>
+    </div>
+  </div>
+
+  <section class="drawer" id="drawer" hidden aria-label="Calendars and settings">
+    <h2>Calendars</h2>
+    <p class="hint">Export each person’s calendar as .ics (Google Calendar: Settings, then the calendar, then Export) and add it here. Uploading someone’s calendar again replaces their old one. Everything stays in this browser.</p>
+    <div class="drawer-grid">
+      <div>
+        <ul class="people" id="people"></ul>
+        <div class="row" style="margin-top:10px">
+          <label class="btn" style="display:inline-block;color:var(--ink)">Add .ics files<input id="addFiles" type="file" accept=".ics,text/calendar" multiple hidden></label>
+          <button class="btn" id="loadSample">Load sample family</button>
+          <button class="btn" id="clearAll">Remove all</button>
+        </div>
+        <p class="errors" id="errors"></p>
       </div>
-      <p id="errors" class="errors"></p>
-    </details>
+      <div style="display:grid;gap:12px">
+        <label>Home address<input id="home" placeholder="12 Oak St, Springfield"></label>
+        <div class="row"><button class="btn" id="locate">Look up travel times</button><span class="hint" id="locateStatus"></span></div>
+        <label>Travel time when a place can’t be found (minutes)<input id="buffer" type="number" min="5" max="90" step="5" value="20"></label>
+        <label>Carpool contacts, one per line (name, note)<textarea id="carpool"></textarea></label>
+        <label>Theme<select id="theme"><option value="auto">Match system</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
+      </div>
+    </div>
   </section>
 
-  <nav class="weeknav">
-    <button id="prev" aria-label="Previous week">←</button>
-    <button id="today">This week</button>
-    <button id="next" aria-label="Next week">→</button>
-    <span id="week-label"></span>
-    <span class="views" role="group" aria-label="View">
-      <button data-view="day">Day</button><button data-view="week">Week</button>
-    </span>
-  </nav>
-  <button id="next-conflict" class="next-conflict" hidden></button>
+  <main id="planView" class="plan">
+    <section aria-label="The week">
+      <div id="bays"></div>
+      <p class="hint" id="planHint">Tap a driver to change it. Or drag a strip by its dots onto a driver.</p>
+    </section>
+    <aside class="alerts" aria-label="Alerts">
+      <h2>Needs a decision</h2>
+      <div id="alertList"></div>
+      <div id="gaps"></div>
+    </aside>
+  </main>
 
-  <main id="week" class="week"></main>
-
-  <aside id="detail" class="detail" hidden></aside>
-
-  <section id="gaps-box" class="gaps" hidden>
-    <h2>Check before trusting this</h2>
-    <ul id="gaps"></ul>
+  <section id="replayView" hidden aria-label="Replay a day">
+    <div class="replay" id="replay">
+      <div class="stagebox"><svg id="mapSvg" viewBox="0 0 760 420" role="img" aria-label="Schematic map: home, the places on the day’s runs, and who is travelling where at the chosen time"></svg></div>
+      <aside class="hud">
+        <section class="card" aria-label="Right now">
+          <div class="card-top"><h3>Right now</h3><b id="rpDayName"></b></div>
+          <div class="bigtime" id="rpClock"></div>
+          <ul class="who" id="rpWho"></ul>
+        </section>
+        <section class="card" aria-label="Problems at this moment"><h3>Problems at this moment</h3><div id="rpProb"></div></section>
+      </aside>
+    </div>
+    <div class="ganttbox">
+      <h3>Who is busy when</h3>
+      <p class="gleg">Drag the line to move through the day. Hatched areas are when a driver is busy with their own calendar. Bars show drivers needed, the green line shows adults free, and red means not enough drivers.</p>
+      <div class="gscroll"><div class="gwrap" id="gwrap">
+        <svg id="ganttSvg" viewBox="0 0 920 252" role="img" aria-label="Timeline of who is busy when. Use the time slider to move through the day."></svg>
+        <svg id="ganttCur" viewBox="0 0 920 252" aria-hidden="true"></svg>
+      </div></div>
+    </div>
+    <div class="rcontrols">
+      <div class="rgroup">
+        <span>Playback</span>
+        <div class="rrow">
+          <button class="rbtn primary" id="rpPlay" aria-pressed="false">Play</button>
+          <button class="rbtn" id="rpBack" aria-label="Back 15 minutes">−15 min</button>
+          <button class="rbtn" id="rpFwd" aria-label="Forward 15 minutes">+15 min</button>
+        </div>
+        <label class="rctl"><span id="rpSpeedOut">6 min per second</span><input id="rpSpeed" type="range" min="1" max="4" step="1" value="2" aria-label="Playback speed"></label>
+      </div>
+      <div class="rgroup">
+        <span>Day and time</span>
+        <div class="rrow" id="rpDays"></div>
+        <input id="rpTime" type="range" min="360" max="1320" step="1" value="960" aria-label="Time of day">
+      </div>
+      <div class="rgroup">
+        <span>Follow</span>
+        <div class="rrow" id="rpTrack"></div>
+        <span>Show</span>
+        <div class="rrow">
+          <button class="rbtn" id="rpRoutes" aria-pressed="true">Routes</button><button class="rbtn" id="rpTravel" aria-pressed="false">Travel times</button><button class="rbtn" id="rpOnly" aria-pressed="false">Problems only</button>
+        </div>
+      </div>
+    </div>
+    <p class="hint">Space plays or pauses. The arrow keys step 15 minutes. H hides the panels.</p>
   </section>
 
-  <section>
-    <h2>Sunday briefing</h2>
-    <pre id="briefing" class="briefing"></pre>
-    <button id="copy-briefing">Copy briefing</button>
+  <section id="todayView" hidden aria-label="Today’s departures">
+    <div class="board">
+      <div class="board-head">
+        <div><h2>Departures</h2><p id="boardDay"></p></div>
+        <div class="clockbox"><span id="clock"></span><button class="btn-dark" id="tick">Skip 15 minutes</button></div>
+      </div>
+      <div class="board-scroll">
+        <div class="brow heads" aria-hidden="true"><span style="--w:5">Leave</span><span style="--w:5">Who</span><span style="--w:14">Where</span><span style="--w:8">Driver</span><span style="--w:12">Status</span></div>
+        <div id="rows"></div>
+      </div>
+    </div>
+    <p class="hint">This board reads the same plan. Fix an alert on the plan and the status here flips to match.</p>
   </section>
 
-  <section>
-    <h2>Conflicts</h2>
-    <ul id="conflict-list" class="conflict-list"></ul>
+  <section id="lanesView" hidden aria-label="Week lanes">
+    <div id="week" class="week"></div>
+    <p class="hint">One lane per person plus the car. Red bands are open alerts; click one to see it on the plan.</p>
   </section>
+</div>
+
+<div class="dock" id="dock" hidden aria-hidden="true"><span class="dock-label">Hand over to</span><span id="dockItems" style="display:contents"></span></div>
+<div class="stamp" id="stamp" hidden role="status"><span>Cleared for</span><b>the week</b></div>
+<div class="sr" id="live" aria-live="polite"></div>
 </body>
 </html>

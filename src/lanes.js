@@ -31,7 +31,7 @@ export function startOfDay(d) {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate());
 }
 
-export function renderLanes(root, { family, events, legs, assignment, conflicts, from, dayCount = 7, selectedId, onSelect, onDay }) {
+export function renderLanes(root, { family, events, legs, assignment, conflicts, names, from, dayCount = 7, selectedId, onSelect, onDay }) {
   const hourPx = dayCount === 1 ? DAY_VIEW_HOUR_PX : WEEK_HOUR_PX;
   const g = { from, hourPx, dayPx: (DAY_END_HOUR - DAY_START_HOUR) * hourPx };
   const DAY_PX = g.dayPx;
@@ -39,7 +39,7 @@ export function renderLanes(root, { family, events, legs, assignment, conflicts,
   events = events.filter((e) => visible(e.start));
   legs = legs.filter((l) => visible(l.start));
   conflicts = conflicts.filter((c) => visible(c.start));
-  const nameOf = (id) => family.find((p) => p.id === id)?.name ?? id;
+  const nameOf = (id) => names?.get(id) ?? family.find((p) => p.id === id)?.name ?? id;
   const colorOf = (id) => family.find((p) => p.id === id)?.color ?? '#888';
   const inConflict = new Set(conflicts.flatMap((c) => c.leg ? c.leg.events.map((e) => e.id) : c.events.map((e) => e.id)));
   const days = [...Array(dayCount)].map((_, i) => new Date(from.getFullYear(), from.getMonth(), from.getDate() + i));

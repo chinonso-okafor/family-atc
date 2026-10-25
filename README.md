@@ -1,5 +1,7 @@
 # Family Air Traffic Control
 
+The screen follows the "Tower briefing" concept: **Plan the week** shows every car trip as a flight strip with its driver (tap the driver or drag the strip onto the dock to change it) and a "Needs a decision" panel with one-tap fixes; **Replay a day** scrubs through a day on a map with a who-is-busy timeline; **Today's board** is a split-flap departures board; **Lanes** is the original one-lane-per-person week view. Driver changes are saved in the browser.
+
 Merge everyone's calendars and flag the moments where a kid needs a ride and no adult is free.
 
 Single-page web app, no backend: calendars are parsed in the browser with [ical.js](https://github.com/kewisch/ical.js) and stay on your machine (saved in localStorage).

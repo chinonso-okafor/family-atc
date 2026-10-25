@@ -1,38 +1,6 @@
-// Turns conflicts into things a person can act on: concrete options for each
-// conflict, calendar-gap warnings, and the plain-text Sunday briefing.
+// Calendar-gap warnings and the plain-text Sunday briefing.
 
-const fmtTime = (d) => d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
 const fmtDay = (d) => d.toLocaleDateString([], { weekday: 'long' });
-const place = (l) => (l.kind === 'pickup' ? `from ${l.from}` : `to ${l.to}`);
-
-export function optionsFor(conflict, { nameOf, carpool = [] }) {
-  const out = [];
-  if (conflict.type === 'no-driver') {
-    const l = conflict.leg;
-    for (const d of conflict.drivingElsewhere) {
-      const them = d.leg.kids.map(nameOf).join(' + ');
-      if (d.swapCover.length) {
-        out.push(`${nameOf(d.adult)} drives ${l.kids.map(nameOf).join(' + ')}, and ${d.swapCover.map(nameOf).join(' or ')} takes ${them} ${place(d.leg)} instead.`);
-      } else {
-        out.push(`${nameOf(d.adult)} could drive this, but then nobody is left to take ${them} ${place(d.leg)}.`);
-      }
-    }
-    for (const b of conflict.busy) {
-      out.push(`${nameOf(b.adult)} moves or leaves early from "${b.event.title}" (${fmtTime(b.event.start)}–${fmtTime(b.event.end)}).`);
-    }
-    for (const c of carpool) {
-      out.push(`Ask ${c.name}${c.note ? ` (${c.note})` : ''} for a ride ${place(l)}.`);
-    }
-  } else if (conflict.type === 'tight-handoff') {
-    const [a, b] = conflict.leg.events;
-    out.push(`Leave "${a.title}" ${conflict.leg.travelMin ? `about ${conflict.leg.travelMin} min` : 'early'} before it ends.`);
-    out.push(`Arrive late to "${b.title}" and tell the organizer.`);
-    for (const c of carpool) out.push(`Ask ${c.name} to take ${conflict.leg.kids.map(nameOf).join(' + ')} to ${conflict.leg.to}.`);
-  } else {
-    out.push('Pick one of the two, or ask the organizer whether one is optional.');
-  }
-  return out;
-}
 
 // Warnings about what the radar can't see. It would rather say "I might be blind
 // here" than show a calm week built on an empty calendar.
@@ -54,46 +22,27 @@ export function calendarGaps(events, family) {
   return warnings;
 }
 
-export function sundayBriefing({ family, legs, assignment, conflicts, events, weekStart, carpool = [] }) {
-  const nameOf = (id) => family.find((p) => p.id === id)?.name ?? id;
-  const lines = [];
-  const weekLabel = weekStart.toLocaleDateString([], { month: 'long', day: 'numeric' });
-  lines.push(`Sunday briefing: week of ${weekLabel}`);
-  lines.push('');
-  lines.push(conflicts.length
-    ? `${conflicts.length} conflict${conflicts.length === 1 ? '' : 's'} to sort out before Monday.`
-    : 'No conflicts found. Every ride has a driver.');
-
-  const days = new Map();
-  for (const c of conflicts) {
-    const k = c.start.toDateString();
-    if (!days.has(k)) days.set(k, []);
-    days.get(k).push(c);
+// Plain-text Sunday briefing for the family chat, built from the live plan
+// (so it reflects any drivers changed by hand).
+export function planBriefing({ plan, weekStart, copy, suggestions, gaps = [], fmt }) {
+  const lines = [`Tower briefing: week of ${weekStart.toLocaleDateString([], { month: 'long', day: 'numeric' })}`, ''];
+  lines.push(plan.alerts.length
+    ? `${plan.alerts.length} thing${plan.alerts.length === 1 ? '' : 's'} to sort out before Monday.`
+    : 'Nothing needs a decision. Every ride has a driver.');
+  let day = '';
+  for (const a of plan.alerts) {
+    const label = fmtDay(a.start).toUpperCase();
+    if (label !== day) { lines.push('', label); day = label; }
+    const c = copy(a, plan);
+    lines.push(`• ${fmt(a.start)} ${c.h}. ${c.p}`);
+    const [first] = suggestions(plan, a);
+    if (first) lines.push(`   Try: ${first.label}.`);
   }
-  for (const list of days.values()) {
-    lines.push('', fmtDay(list[0].start).toUpperCase());
-    for (const c of list) {
-      const what = c.type === 'double-booked'
-        ? `${nameOf(c.people[0])} is booked in two places: ${c.events.map((e) => `"${e.title}"`).join(' and ')}`
-        : c.type === 'tight-handoff'
-          ? `${c.leg.kids.map(nameOf).join(' + ')} can't get from ${c.leg.from} to ${c.leg.to} in time`
-          : `Nobody can take ${c.leg.kids.map(nameOf).join(' + ')} ${place(c.leg)} (${c.leg.kind})`;
-      lines.push(`• ${fmtTime(c.start)}: ${what}`);
-      const [first] = optionsFor(c, { nameOf, carpool });
-      if (first) lines.push(`   Try: ${first}`);
-    }
-  }
-
   const load = new Map();
-  for (const l of legs) {
-    const d = assignment.get(l.id);
-    if (d) load.set(d, (load.get(d) ?? 0) + 1);
-  }
+  for (const t of plan.trips) if (t.driver) load.set(t.driver, (load.get(t.driver) ?? 0) + 1);
   if (load.size) {
-    lines.push('', `Driving load: ${[...load].map(([id, n]) => `${nameOf(id)} ${n} trip${n === 1 ? '' : 's'}`).join(', ')}.`);
+    lines.push('', `Driving: ${[...load].map(([k, n]) => `${plan.drivers.get(k).name} ${n} trip${n === 1 ? '' : 's'}`).join(', ')}.`);
   }
-
-  const gaps = calendarGaps(events, family);
   if (gaps.length) lines.push('', 'Check before trusting this:', ...gaps.map((g) => `• ${g}`));
   return lines.join('\n');
 }
