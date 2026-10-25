@@ -1,5 +1,7 @@
 # Family Air Traffic Control
 
+The screen follows the "Tower briefing" concept: **Plan the week** shows every car trip as a flight strip with its driver (tap the driver or drag the strip onto the dock to change it) and a "Needs a decision" panel with one-tap fixes; **Replay a day** scrubs through a day on a map with a who-is-busy timeline; **Today's board** is a split-flap departures board; **Lanes** is the original one-lane-per-person week view. Driver changes are saved in the browser.
+
 Merge everyone's calendars and flag the moments where a kid needs a ride and no adult is free.
 
 Single-page web app, no backend: calendars are parsed in the browser with [ical.js](https://github.com/kewisch/ical.js) and stay on your machine (saved in localStorage).
@@ -22,9 +24,18 @@ Click **Load sample family** and go to the week of Oct 26 2026 to see three seed
 
 Travel time is a flat buffer for now (default 20 min).
 
-## Next (Sunday plan)
+## Travel time, options and the briefing
 
-- Real travel time between locations (routing API or straight-line distance estimate)
-- Conflict drill-in options: swap drivers, ask a carpool contact
-- "Sunday briefing" summary of the coming week
-- Nudge about calendar gaps (e.g. no school pickups in any feed) so the radar doesn't give false confidence
+- `src/travel.js` estimates drive time from coordinates (straight-line distance x 1.4 for roads, 35 km/h, 5 min overhead). **Look up travel times** geocodes the addresses with OpenStreetMap's Nominatim (one request per second) and caches them in the browser. Anything it can't find uses the flat buffer.
+- A kid whose next activity starts before they can get there is flagged as a **tight handoff**.
+- Clicking a conflict lists options: swap drivers (and whether that leaves another trip uncovered), ask a busy adult to move something, or ask a carpool contact (one per line in settings).
+- `src/briefing.js` writes the Sunday briefing (copy it into the family chat) and a "Check before trusting this" box for calendars that are empty or have kid events with no location.
+
+## Not done yet
+
+- Fetching Google "secret iCal" URLs (needs a small CORS proxy)
+- Sending the briefing anywhere automatically
+
+## Sample calendars to upload
+
+`sample-calendars/` has a fuller family (Mom, Dad, Ada, Ben) from Oct 19 to Dec 20, 2026, with conflicts planted in particular weeks (regenerate with `python3 scripts/make-sample-calendars.py sample-calendars`). Upload all four, set Mom and Dad to adult, and page forward through the weeks.

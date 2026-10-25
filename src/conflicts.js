@@ -2,7 +2,8 @@
 //  - double-booked: one person has overlapping events
 //  - no-driver: a kid needs a ride (drop-off, pick-up or handoff between
 //    activities) and no adult is free to take it
-// Travel time is a flat buffer until the Sunday work adds real estimates.
+//  - tight-handoff: a kid's next activity starts before they can get there
+// Travel time comes from a (from, to) -> minutes function (see travel.js).
 
 const overlaps = (a, b) => a.start < b.end && b.start < a.end;
 const sameLocation = (a, b) => normalize(a.location) === normalize(b.location);
@@ -36,8 +37,9 @@ export function detectDoubleBookings(events, kids) {
 }
 
 // Turn kids' located events into the car trips they imply.
-export function buildRideLegs(events, kids, bufferMin) {
-  const buffer = bufferMin * 60_000;
+export function buildRideLegs(events, kids, travelMin) {
+  const flat = typeof travelMin === 'number' ? () => travelMin : travelMin;
+  const min = (m) => m * 60_000;
   const legs = [];
   for (const kid of kids) {
     const list = timed(events)
@@ -47,19 +49,27 @@ export function buildRideLegs(events, kids, bufferMin) {
       const e = list[i];
       const prev = list[i - 1];
       const next = list[i + 1];
-      const chainedFromPrev = prev && prev.end <= e.start && e.start - prev.end <= 2 * buffer;
-      const chainsToNext = next && e.end <= next.start && next.start - e.end <= 2 * buffer;
+      // events close together (within two typical trips) are one outing, not a trip home in between
+      const chained = (x, y) => x.end <= y.start && y.start - x.end <= 2 * min(flat(x.location, y.location));
+      const chainedFromPrev = prev && chained(prev, e);
+      const chainsToNext = next && chained(e, next);
 
       if (chainedFromPrev) {
         if (!sameLocation(prev, e)) {
-          legs.push(leg('handoff', kid, prev.location, e.location, prev.end,
-            new Date(Math.max(e.start, +prev.end + buffer)), [prev, e]));
+          const need = min(flat(prev.location, e.location));
+          const l = leg('handoff', kid, prev.location, e.location, prev.end,
+            new Date(Math.max(e.start, +prev.end + need)), [prev, e]);
+          l.travelMin = flat(prev.location, e.location);
+          l.tight = prev.end.getTime() + need > e.start.getTime();
+          legs.push(l);
         }
       } else {
-        legs.push(leg('dropoff', kid, null, e.location, new Date(e.start - buffer), e.start, [e]));
+        const t = flat(null, e.location);
+        legs.push({ ...leg('dropoff', kid, null, e.location, new Date(e.start - min(t)), e.start, [e]), travelMin: t });
       }
       if (!chainsToNext) {
-        legs.push(leg('pickup', kid, e.location, null, e.end, new Date(+e.end + buffer), [e]));
+        const t = flat(e.location, null);
+        legs.push({ ...leg('pickup', kid, e.location, null, e.end, new Date(+e.end + min(t)), [e]), travelMin: t });
       }
     }
   }
@@ -162,10 +172,10 @@ function solveGreedy(legs, eligible) {
   return chosen;
 }
 
-export function detectConflicts(events, family, { bufferMin = 20 } = {}) {
+export function detectConflicts(events, family, { bufferMin = 20, travelMin } = {}) {
   const adults = family.filter((p) => p.role === 'adult').map((p) => p.id);
   const kids = family.filter((p) => p.role === 'kid').map((p) => p.id);
-  const legs = buildRideLegs(events, kids, bufferMin);
+  const legs = buildRideLegs(events, kids, travelMin ?? bufferMin);
   const { assignment, busy, eligible } = assignDrivers(legs, events, adults);
 
   const noDriver = legs
@@ -179,16 +189,30 @@ export function detectConflicts(events, family, { bufferMin = 20 } = {}) {
       end: l.end,
       busy: busy.get(l.id),
       // free adults who were needed for an overlapping leg instead
-      drivingElsewhere: eligible.get(l.id).map((a) => ({
-        adult: a,
-        leg: legs.find((o) => o !== l && assignment.get(o.id) === a && overlaps(o, l)),
-      })),
+      drivingElsewhere: eligible.get(l.id).map((a) => {
+        const other = legs.find((o) => o !== l && assignment.get(o.id) === a && overlaps(o, l));
+        return {
+          adult: a,
+          leg: other,
+          // other adults who could take that trip instead, freeing `a` for this one
+          swapCover: other ? eligible.get(other.id).filter((x) => x !== a) : [],
+        };
+      }),
     }));
+
+  const tight = legs.filter((l) => l.tight).map((l) => ({
+    id: `tight:${l.id}`,
+    type: 'tight-handoff',
+    people: [...l.kids],
+    leg: l,
+    start: l.events[0].end,
+    end: l.events[1].start > l.end ? l.events[1].start : l.end,
+  }));
 
   return {
     legs,
     assignment,
-    conflicts: [...detectDoubleBookings(events, kids), ...noDriver].sort((a, b) => a.start - b.start),
+    conflicts: [...detectDoubleBookings(events, kids), ...tight, ...noDriver].sort((a, b) => a.start - b.start),
   };
 }
 

@@ -1,0 +1,15 @@
+{
+  "home": "Home",
+  "places": {
+    "home": { "lat": 40.0000, "lng": -75.0000 },
+    "riverside park": { "lat": 40.0150, "lng": -74.9900 },
+    "harmony music studio": { "lat": 40.0300, "lng": -75.0200 },
+    "lincoln library": { "lat": 40.0310, "lng": -75.0215 },
+    "westside ymca": { "lat": 39.9900, "lng": -75.0400 },
+    "jump zone": { "lat": 40.0600, "lng": -75.0500 }
+  },
+  "carpool": [
+    { "name": "The Garcias", "note": "swim and soccer" },
+    { "name": "Priya's mom", "note": "art and piano" }
+  ]
+}
